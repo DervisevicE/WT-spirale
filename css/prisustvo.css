@@ -1,0 +1,59 @@
+.glavna, tr, td, th{
+    border: 0.5px solid black;
+    border-collapse: collapse;
+    overflow: hidden;
+    text-align: center;
+}
+
+.glavna td{
+    vertical-align: top;
+}
+
+p{
+    font-size: 14pt;
+}
+
+
+.glavna{
+    width: 80%;
+    margin: auto;
+}
+
+
+.glavna tr{
+    height: 50px;
+}
+
+.nesto{
+    border-collapse: collapse;
+}
+
+.prisutan{
+    background-color: rgb(104, 177, 89);
+}
+
+.odsutan{
+    background-color: rgb(162, 44, 44);
+}
+
+.nije_uneseno{
+    background-color: white;
+}
+
+.prisustvo{
+    width: 50px;
+    padding: 0;
+    border-style: hidden;
+}
+
+.rasiri{
+    width: 400px;
+}
+
+.nesto tr,td{
+    padding: 8px;
+}
+
+.nema{
+    display: none;
+}

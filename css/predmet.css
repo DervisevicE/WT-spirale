@@ -1,0 +1,91 @@
+*{
+    margin: 0;
+    padding: 0;
+}
+
+.meni{
+    position: fixed;
+    min-height: 10vh;
+    width: 100%;
+    text-align: justify;
+    background-color: #b59e7b;
+    top: 0;
+}
+
+
+.meni .horziontalno{
+    display: inline;
+    text-decoration: none;
+}
+
+.meni ul{
+    float: left;
+    padding: 4px 25px;
+    list-style: none;
+}
+
+.meni li>ul li{
+    display: inline;
+}
+
+.meni a{
+    color: black;
+}
+
+.content{
+    padding: 150px 0px;
+   
+}
+
+.content div{
+    padding: 10px 8px;
+    scroll-margin-block-start:126px;
+}
+
+.content .grid>div{
+    background-color: #e0d5c3;
+}
+
+.grid{
+    display: grid;
+    background-color: #d8c3a4;
+    border: 3px solid #ceb38a;
+    grid-template-columns: repeat(auto-fit,200px);
+    gap: 10px;
+    
+}
+
+.grid>div{
+    border: 2px solid white;
+}
+
+.redovni{
+    width: fit-content;
+    height: fit-content;
+    background-image: url(../img/white.png);
+    
+}
+
+.izborni{
+    background-image: url(../img/powderblue.png);
+    width: fit-content;
+    height: fit-content;
+}
+
+.ne_ide{
+    background-image: url(../img/gray.png);
+    width: fit-content;
+    height: fit-content;
+}
+
+@media(max-width:852px){
+    .meni{
+        position: relative;
+    }
+
+    .meni ul{
+        float: none;
+    }
+}
+
+
