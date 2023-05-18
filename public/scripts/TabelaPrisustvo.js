@@ -37,7 +37,7 @@ let TabelaPrisustvo = function (divRef, podaci) {
 
 
     var trenutnaSedmica = dajPosljednjuUnesenuSedmicu(podaci.prisustva);
-    let crtajTabelu = function () {
+    let crtajTabelu = function (dugmeLijevo, dugmeDesno) {
         divRef.innerHTML = "";
         divRef.innerHTML += "<p> Naziv predmeta: " + podaci.predmet + "</p>";
         var tabela = "<table>";
@@ -56,6 +56,8 @@ let TabelaPrisustvo = function (divRef, podaci) {
             tabela += "<td>" + podaci.studenti[i].ime + "</td>";
             tabela += "<td>" + podaci.studenti[i].index + "</td>";
 
+            let prisustvaStudenta = podaci.prisustva.filter(x => x.index == podaci.studenti[i].index);
+
             for (let j = 0; j < podaci.prisustva.length; j++) {
                 if (podaci.prisustva[j].index == podaci.studenti[i].index) {
                     if (podaci.prisustva[j].sedmica == trenutnaSedmica) {
@@ -64,6 +66,7 @@ let TabelaPrisustvo = function (divRef, podaci) {
                             "<tr>";
                         let prisustvovaoP = podaci.prisustva[j].predavanja;
                         let prisustvovaoV = podaci.prisustva[j].vjezbe;
+                        console.log(prisustvovaoP, prisustvovaoV);
 
                         for (let brPredavanja = 1; brPredavanja <= podaci.brojPredavanjaSedmicno; brPredavanja++) {
                             tabela += "<td> P <br> " + brPredavanja + "</td>";
@@ -73,26 +76,58 @@ let TabelaPrisustvo = function (divRef, podaci) {
                         }
                         tabela += "</tr>";
                         tabela += "<tr>";
-
+                        
                         for (let brPredavanja = 1; brPredavanja <= podaci.brojPredavanjaSedmicno; brPredavanja++) {
+                            let parametri = "\'" + podaci.predmet + "\'," + podaci.studenti[i].index + "," + trenutnaSedmica + ",";
                             if (brPredavanja <= prisustvovaoP) {
-                                tabela += "<td class=\"prisutan\"></td>";
+                                parametri += prisustvovaoP-1 + ",null";
+                                tabela += "<td onclick=\"(function(event){promijeniPrisustvo("+ parametri+")})()\" class=\"prisutan\"></td>";
                             } else {
-                                tabela += "<td class=\"odsutan\"></td>";
+                                parametri += prisustvovaoP+1 + ",null";
+                                tabela += "<td onclick=\"(function(event){promijeniPrisustvo("+ parametri+")})()\" class=\"odsutan\"></td>";
                             }
                         }
                         for (let brVjezbi = 1; brVjezbi <= podaci.brojVjezbiSedmicno; brVjezbi++) {
+                            let parametri = "\'" + podaci.predmet + "\'," + podaci.studenti[i].index + "," + trenutnaSedmica + ",null,";
                             if (brVjezbi <= prisustvovaoV) {
-                                tabela += "<td class=\"prisutan\"></td>";
+                                parametri += prisustvovaoV-1;
+                                tabela += "<td onclick=\"(function(event){promijeniPrisustvo("+ parametri+")})()\" class=\"prisutan\"></td>";
                             } else {
-                                tabela += "<td class=\"odsutan\"></td>";
+                                parametri += prisustvovaoV+1;
+                                tabela += "<td onclick=\"(function(event){promijeniPrisustvo("+ parametri+")})()\" class=\"odsutan\"></td>";
                             }
                         }
                         tabela += "</table>";
                         tabela += "</tr>";
                     } if (podaci.prisustva[j].sedmica < trenutnaSedmica) {
                         tabela += "<td>" + dajPostotakPrisustvaStudenta(podaci.prisustva[j], podaci.brojPredavanjaSedmicno, podaci.brojVjezbiSedmicno) + "%" + "</td>";
+                    } if(prisustvaStudenta.find(prisustva => prisustva.sedmica === trenutnaSedmica) === undefined){
+                        tabela += "<td class=\"prisustvo\">" +
+                        "<table class=\"nesto\">" +
+                        "<tr>";
 
+                    for (let brPredavanja = 1; brPredavanja <= podaci.brojPredavanjaSedmicno; brPredavanja++) {
+                        tabela += "<td> P <br> " + brPredavanja + "</td>";
+                    }
+                    for (let brVjezbi = 1; brVjezbi <= podaci.brojVjezbiSedmicno; brVjezbi++) {
+                        tabela += "<td> V <br> " + brVjezbi + "</td>";
+                    }
+                    tabela += "</tr>";
+                    tabela += "<tr>";
+
+                    for (let brPredavanja = 1; brPredavanja <= podaci.brojPredavanjaSedmicno; brPredavanja++) {
+                        const parametri = "\'" + podaci.predmet + "\'," + podaci.studenti[i].index + "," + trenutnaSedmica + ",1,null";
+                        tabela += "<td onclick=\"(function(event){promijeniPrisustvo("+ parametri+")})()\"></td>";
+                        //tabela += "<td onclick=\"promijeniPrisustvo("+ parametri+")()\"></td>";
+                    }
+                    for (let brVjezbi = 1; brVjezbi <= podaci.brojVjezbiSedmicno; brVjezbi++) {
+                        const parametri = "\'" + podaci.predmet + "\'," + podaci.studenti[i].index + "," + trenutnaSedmica + ",null,1";
+                         tabela += "<td onclick=\"(function(event){promijeniPrisustvo("+ parametri+")})()\"></td>";
+                    
+                    }
+
+                    tabela += "</table>";
+                    tabela += "</tr>";
                     }
                 }
             }
@@ -176,40 +211,38 @@ let TabelaPrisustvo = function (divRef, podaci) {
         return ok;
     }
 
-
-
-
-
-
     var skripta = document.createElement('script');
     skripta.type = 'text/javascript';
     skripta.src = 'https://kit.fontawesome.com/b43fea0bec.js';
     document.body.appendChild(skripta);
 
+    var dugmeLijevo = document.createElement("button");
+    var dugmeDesno = document.createElement("button");
 
     //implementacija metoda
     let sljedecaSedmica = function () {
         if (trenutnaSedmica < dajPosljednjuUnesenuSedmicu(podaci.prisustva)) {
             trenutnaSedmica++;
             crtajTabelu();
+            divRef.appendChild(dugmeLijevo);
+            divRef.appendChild(dugmeDesno);
         }
     }
 
     let prethodnaSedmica = function () {
         trenutnaSedmica--;
         if (trenutnaSedmica < 1) trenutnaSedmica = 1;
-        if (trenutnaSedmica > 0)
+        if (trenutnaSedmica > 0){
             crtajTabelu();
+            divRef.appendChild(dugmeLijevo);
+            divRef.appendChild(dugmeDesno);
+        }
     }
 
-
-    var dugmeLijevo = document.createElement("button");
     dugmeLijevo.onclick = prethodnaSedmica;
     dugmeLijevo.innerHTML = "<i class=\"fa-solid fa-arrow-left\"></i>";
 
 
-
-    var dugmeDesno = document.createElement("button");
     dugmeDesno.onclick = sljedecaSedmica;
     dugmeDesno.innerHTML = "<i class=\"fa-solid fa-arrow-right\"></i>";
 
@@ -217,9 +250,9 @@ let TabelaPrisustvo = function (divRef, podaci) {
     let okValidacija = validirajPodatke();
 
     if (okValidacija) {
-        document.body.appendChild(dugmeLijevo);
-        document.body.appendChild(dugmeDesno);
         crtajTabelu();
+        divRef.appendChild(dugmeLijevo);
+        divRef.appendChild(dugmeDesno);
     } else {
         divRef.innerHTML = "";
         divRef.innerHTML = "<p> Podaci o prisustvu nisu validni!</p>";
