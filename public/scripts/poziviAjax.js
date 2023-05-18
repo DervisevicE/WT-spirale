@@ -9,6 +9,7 @@ const PoziviAjax = (() => {
                 var jsonRes = JSON.parse(ajax.responseText);
                 var divRef = document.getElementById("prisustva");
                 divRef.innerHTML="";
+                console.log(jsonRes.prisustva);
                 fnCallback(divRef, jsonRes.prisustva);
             }
             else if(ajax.readyState==4){

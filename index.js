@@ -2,10 +2,55 @@ const express = require('express')
 const bodyParser = require("body-parser");
 const bcrypt = require("bcrypt");
 const session = require("express-session");
+const { Sequelize, DataTypes } = require("sequelize");
 const fs = require("fs");
 const { Console } = require('console');
 const app = express()
 const port = 3000
+
+const sequelize = new Sequelize("wt22", "root", "password", {
+  host: "localhost",
+  dialect: "mysql",
+  logging: false,
+  define: {
+    freezeTableName: true,
+  }
+});
+
+const Student = sequelize.define('Student', {
+  ime: DataTypes.STRING,
+  index: DataTypes.INTEGER,
+}, { timestamps: false });
+
+const Predmet = sequelize.define('Predmet', {
+  naziv: DataTypes.STRING,
+  brojPredavanjaSedmicno: DataTypes.INTEGER,
+  brojVjezbiSedmicno: DataTypes.INTEGER,
+}, { timestamps: false });
+
+const Nastavnik = sequelize.define('Nastavnik', {
+  username: DataTypes.STRING,
+  password_hash: DataTypes.STRING,
+}, { timestamps: false });
+
+Nastavnik.belongsToMany(Predmet, { through: 'NastavnikPredmet' });
+Predmet.belongsToMany(Nastavnik, { through: 'NastavnikPredmet' });
+
+const Prisustvo = sequelize.define('Prisustvo', {
+  sedmica: DataTypes.INTEGER,
+  predavanja: DataTypes.INTEGER,
+  vjezbe: DataTypes.INTEGER,
+  PredmetId: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
+  StudentId: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
+}, {
+  timestamps: false,
+});
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -17,34 +62,40 @@ app.use(session({
   saveUninitialized: true
 }));
 
-//
+
+function onlyUnique(value, index, self) {
+  return self.indexOf(value) === index;
+}
 
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
 
-  fs.readFile("data/nastavnici.json", (err, data) => {
-    if (err) throw err;
-    const nastavnici = JSON.parse(data);
-
-    const korisnici = nastavnici.filter((x) => x.nastavnik.username === username);
-
-
-    if (korisnici.length > 0) {
-      console.log(korisnici[0].nastavnik.password_hash);
-      console.log(bcrypt.hashSync("password", 10));
-      const areEqual = bcrypt.compareSync(password, korisnici[0].nastavnik.password_hash);
-      if (areEqual) {
-        req.session.username = username;
-        req.session.predmeti = korisnici[0].predmeti;
-        res.json({
-          poruka: "Uspješna prijava"
-        });
-        return;
-      }
+  Nastavnik.findOne({
+    where: {
+      username: username,
+    },
+    include: Predmet,
+  }).then(nastavnikModel => {
+    if (nastavnikModel === null) {
+      res.json({
+        poruka: "Nespješna prijava"
+      });
+      return;
     }
-    res.json({
-      poruka: "Nespješna prijava"
-    });
+    const nastavnik = nastavnikModel.get({ plain: true });
+    const areEqual = bcrypt.compareSync(password, nastavnik.password_hash);
+    if (areEqual) {
+      req.session.username = username;
+      req.session.predmeti = nastavnik.Predmets.map(p => p.naziv);
+      res.json({
+        poruka: "Uspješna prijava"
+      });
+      return;
+    } else {
+      res.json({
+        poruka: "Nespješna prijava"
+      });
+    }
   });
 });
 
@@ -53,11 +104,9 @@ app.post('/logout', (req, res) => {
     if (err) throw err;
     res.json({
       poruka: "Uspješna odjava",
-    })// cannot access session here
+    });
   })
 });
-
-//
 
 app.get('/predmeti', (req, res) => {
   if (req.session.username) {
@@ -69,10 +118,50 @@ app.get('/predmeti', (req, res) => {
       greska: "Nastavnik nije loginovan",
     });
   }
-
 });
 
-app.get('/predmet/:naziv', (req, res) => {
+const getPredmet = async (naziv) => {
+  const predmet = await Predmet.findOne({
+    where: {
+      naziv: naziv,
+    }
+  });
+
+  if (predmet === null) {
+    res.json({
+      greska: "Ne postoji predmet",
+    });
+    return;
+  }
+
+  const prisustva = await Prisustvo.findAll({
+    where: {
+      PredmetId: predmet.id,
+    }
+  });
+
+  const studenti = await Student.findAll();
+  return {
+      studenti: [
+        ...prisustva.map(p => p.StudentId)
+          .filter(onlyUnique)
+          .map(id => studenti.filter(s => s.id === id)[0])
+      ],
+      prisustva: [
+        ...prisustva.map(p => {
+          return {
+            ...p.dataValues,
+            index: studenti.filter(s => s.id === p.StudentId)[0].index,
+          }
+        }),
+      ],
+      predmet: predmet.naziv,
+      brojPredavanjaSedmicno: predmet.brojPredavanjaSedmicno,
+      brojVjezbiSedmicno: predmet.brojVjezbiSedmicno,
+  };
+}
+
+app.get('/predmet/:naziv', async (req, res) => {
   if (!req.session.username) {
     res.json({
       greska: "Nastavnik nije loginovan",
@@ -80,88 +169,75 @@ app.get('/predmet/:naziv', (req, res) => {
     return;
   }
 
-  const data = fs.readFileSync('data/prisustva.json');
-  const prisustva = JSON.parse(data);
-
-  console.log(prisustva);
-  console.log(req.params.naziv);
-  const prisustvaZaPredmet = prisustva.filter((x) => x.predmet === req.params.naziv);
-  if (prisustvaZaPredmet.length > 0) {
-    res.json({
-      prisustva: prisustvaZaPredmet[0],
-    });
-  } else {
-    res.json({
-      greska: "Ne postoji predmet",
-    });
-  }
-  console.log(req.params.naziv);
+  res.json({
+    prisustva: await getPredmet(req.params.naziv)
+  });
 });
 
-app.post('/prisustvo/predmet/:naziv/student/:index', (req, res) => {
+app.post('/prisustvo/predmet/:naziv/student/:index', async (req, res) => {
   const { naziv, index } = req.params;
   const { prisustvo } = req.body;
-  console.log("SADA");
-  console.log("SEDMICA" + req.body.sedmica);
 
 
-  const data = fs.readFileSync('data/prisustva.json');
-  const prisustvaJson = JSON.parse(data);
-
-  console.log("SVA PRISUSTVA JSON ");
-  console.log(JSON.stringify(prisustvaJson));
-
-  let pronadjenPredmet = prisustvaJson.find(p => p.predmet === naziv);
-  console.log("INDEX JS PREDMET");
-  console.log(JSON.stringify(pronadjenPredmet));
-
-  if (!pronadjenPredmet) {
+  const predmet = await Predmet.findOne({
+    where: {
+      naziv: naziv,
+    },
+  });
+  
+  if (!predmet) {
     res.json({
       poruka: "Predmet nije pronađen"
     });
     return;
   }
 
-  let prisustvaStudenta = pronadjenPredmet.prisustva.filter(p => p.index == index);
-  console.log("INDEX JS STUDENT PRISUSTVA");
-  console.log(JSON.stringify(prisustvaStudenta));
+  const student = await Student.findOne({
+    where: {
+      index: index,
+    },
+  });
 
-  if (!prisustvaStudenta) {
+  let prisustva = (await Prisustvo.findAll({
+    where: {
+      PredmetId: predmet.id,
+      StudentId: student.id,
+    }
+  })).map(p => p.dataValues);
+
+
+  if (prisustva.length === 0) {
     res.json({
       poruka: "Student nije pronađen"
     });
     return;
   }
 
-  let prisustvoZaSedmicu = prisustvaStudenta.filter(s => s.sedmica == prisustvo.sedmica);
-  console.log("INDEX JS STUDENT PRISUSTVA SEDMICA");
-  console.log(JSON.stringify(prisustvoZaSedmicu));
-  console.log("PREDAVANJA I VJEZBE");
-  console.log(prisustvo.predavanja);
-  console.log(prisustvo.vjezbe);
+  let prisustvoZaSedmicu = prisustva.filter(s => s.sedmica === prisustvo.sedmica);
+
   if (prisustvoZaSedmicu.length === 0) {
-    prisustvoZaSedmicu = {
+    await Prisustvo.create({
       sedmica: prisustvo.sedmica,
-      predavanja: prisustvo.predavanja ?? 0,
-      vjezbe: prisustvo.vjezbe ?? 0, // prisustvo.vjezbe ? prisustvo.vjezbe : 0
-      index: Number(index),
-    };
-
-    console.log("DODAJEM RED");
-    pronadjenPredmet.prisustva.push(prisustvoZaSedmicu);
-    console.log("DODAN RED");
+      predavanja: prisustvo.predavanja,
+      vjezbe: prisustvo.vjezbe,
+      StudentId: student.id,
+      PredmetId: predmet.id,
+    })
   } else {
-
-    if (prisustvo.predavanja != null)
-      prisustvoZaSedmicu[0].predavanja = prisustvo.predavanja;
-
-    if (prisustvo.vjezbe != null)
-      prisustvoZaSedmicu[0].vjezbe = prisustvo.vjezbe;
+    const p = prisustvoZaSedmicu[0];
+    if (prisustvo.predavanja) {
+      p.predavanja = prisustvo.predavanja;
+    } else if(prisustvo.vjezbe) {
+      p.vjezbe = prisustvo.vjezbe;
+    }
+    await Prisustvo.update(p, {
+      where: {
+        id: p.id,
+      },
+    });
   }
 
-
-  res.json(pronadjenPredmet);
-  fs.writeFileSync('data/prisustva.json', JSON.stringify(prisustvaJson));
+  res.json(await getPredmet(naziv));
 });
 
 app.get("/", (req, res) => {
@@ -172,8 +248,147 @@ app.get("/", (req, res) => {
 });
 
 
-
-app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`)
+sequelize.authenticate().then(_ => {
+  initialize().then(_ => {
+    app.listen(port, () => {
+      console.log(`Spirala app listening on port ${port}`);
+    })
+  }).catch(error => {
+    console.log("Sync failed");
+    console.log(error);
+  });
+}).catch(error => {
+  console.log("Authentication failed");
+  console.log(error);
 })
+
+const initialize = async () => {
+  await sequelize.sync({
+    force: true,
+  });
+  const nastavnik1 = await Nastavnik.create({
+    username: 'nastavnik1',
+    password_hash: bcrypt.hashSync('password', 10),
+  });
+  const nastavnik2 = await Nastavnik.create({
+    username: 'nastavnik2',
+    password_hash: bcrypt.hashSync('password', 10),
+  });
+  const predmet1 = await Predmet.create({
+    naziv: "Predmet1",
+    brojPredavanjaSedmicno: 3,
+    brojVjezbiSedmicno: 2,
+  });
+  const predmet2 = await Predmet.create({
+    naziv: "Predmet2",
+    brojPredavanjaSedmicno: 3,
+    brojVjezbiSedmicno: 2,
+  });
+  const predmet3 = await Predmet.create({
+    naziv: "Predmet3",
+    brojPredavanjaSedmicno: 3,
+    brojVjezbiSedmicno: 2,
+  });
+  await nastavnik1.addPredmet(predmet1);
+  await nastavnik1.addPredmet(predmet2);
+  await nastavnik1.addPredmet(predmet3);
+
+  await nastavnik2.addPredmet(predmet1);
+
+  const student1 = await Student.create({
+    ime: "Neko",
+    index: 12345,
+  });
+  const student2 = await Student.create({
+    ime: "Neko Nekic",
+    index: 12346,
+  });
+
+  await Prisustvo.bulkCreate([
+    {
+      sedmica: 1,
+      predavanja: 1,
+      vjezbe: 1,
+      PredmetId: predmet1.id,
+      StudentId: student1.id,
+    },
+    {
+      sedmica: 2,
+      predavanja: 2,
+      vjezbe: 1,
+      PredmetId: predmet1.id,
+      StudentId: student1.id,
+    },
+    {
+      sedmica: 1,
+      predavanja: 3,
+      vjezbe: 2,
+      PredmetId: predmet1.id,
+      StudentId: student2.id,
+    }
+  ]);
+
+  await Prisustvo.bulkCreate([
+    {
+      sedmica: 1,
+      predavanja: 1,
+      vjezbe: 1,
+      PredmetId: predmet2.id,
+      StudentId: student1.id,
+    },
+    {
+      sedmica: 2,
+      predavanja: 2,
+      vjezbe: 1,
+      PredmetId: predmet2.id,
+      StudentId: student1.id,
+    },
+    {
+      sedmica: 1,
+      predavanja: 3,
+      vjezbe: 2,
+      PredmetId: predmet2.id,
+      StudentId: student2.id,
+    },
+    {
+      sedmica: 2,
+      predavanja: 3,
+      vjezbe: 2,
+      PredmetId: predmet2.id,
+      StudentId: student2.id,
+    },
+  ]);
+
+  await Prisustvo.bulkCreate([
+    {
+      sedmica: 1,
+      predavanja: 1,
+      vjezbe: 1,
+      PredmetId: predmet3.id,
+      StudentId: student1.id,
+    },
+    {
+      sedmica: 2,
+      predavanja: 2,
+      vjezbe: 1,
+      PredmetId: predmet3.id,
+      StudentId: student1.id,
+    },
+    {
+      sedmica: 1,
+      predavanja: 3,
+      vjezbe: 2,
+      PredmetId: predmet3.id,
+      StudentId: student2.id,
+    },
+    {
+      sedmica: 2,
+      predavanja: 3,
+      vjezbe: 2,
+      PredmetId: predmet3.id,
+      StudentId: student2.id,
+    },
+  ]);
+
+}
 
