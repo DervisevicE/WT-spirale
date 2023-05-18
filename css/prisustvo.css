@@ -1,11 +1,11 @@
-.glavna, tr, td, th{
+table, tr, td, th{
     border: 0.5px solid black;
     border-collapse: collapse;
     overflow: hidden;
     text-align: center;
 }
 
-.glavna td{
+table td{
     vertical-align: top;
 }
 
@@ -14,13 +14,13 @@ p{
 }
 
 
-.glavna{
+table{
     width: 80%;
     margin: auto;
 }
 
 
-.glavna tr{
+table tr{
     height: 50px;
 }
 
